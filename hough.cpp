@@ -238,6 +238,6 @@ int main(int argc, char** argv)
   return 0;
 }
 
-// g++ hough.cpp -I/usr/local/include/ -L/opt/vc/lib -lraspicam -lraspicam_cv -lmmal -lmmal_core -lmmal_util -lopencv_core -lopencv_highgui `pkg-config --cflags --libs opencv` -lwiringPiDev
+// g++ hough.cpp -I/usr/local/include/ -L/opt/vc/lib -lraspicam -lraspicam_cv -lmmal -lmmal_core -lmmal_util -lopencv_core -lopencv_highgui `pkg-config --cflags --libs opencv` -lwiringPi Path.cpp PiLo.cpp
 
 // ./a.out ~/Downloads/dach-normal.avi 
