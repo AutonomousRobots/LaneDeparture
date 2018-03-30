@@ -1,5 +1,10 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <raspicam/raspicam_cv.h>
+#include <wiringPi.h>
+#include <wiringSerial.h>
+#include "PiLo.h"
+#include "Path.h"
 
 #include <iostream>
 
@@ -79,6 +84,8 @@ Vec4i getBestLine(vector<Vec4i> lines)
 
 int main(int argc, char** argv)
 {
+  bool usingCamera;
+  raspicam::RaspiCam_Cv camera;
   VideoCapture cap;
   TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
   Size subPixWinSize(10,10), winSize(31,31);
@@ -86,15 +93,32 @@ int main(int argc, char** argv)
   cv::CommandLineParser parser(argc, argv, "{@input|0|}");
   string input = parser.get<string>("@input");
   
-  if( input.size() == 1 && isdigit(input[0]) )
-    cap.open(input[0] - '0');
-  else
-    cap.open(input);
-  if( !cap.isOpened() )
+/*  if( input.size() == 1 && isdigit(input[0]) ) 
+   {
+      cap.open(input[0] - '0');
+      usingCamera = false;
+      if( !cap.isOpened())
+      {
+        cout << "Could not initialize capturing...\n";
+        return 0;
+      }
+    }
+  else 
   {
-    cout << "Could not initialize capturing...\n";
-    return 0;
+*/    usingCamera = true;
+    camera.set( CV_CAP_PROP_FORMAT, CV_8UC1 );
+    if (!camera.open()) 
+    {
+      runtime_error tError("[Raspi_Capture] Camera failed to open");
+      throw tError;
+    }
+//  }  
+  PiLo pilo;  //Start by creating a PiLo object (serial is started in the constructor)
+
+  if(!pilo.ok()){
+    return 1;
   }
+  
   
   namedWindow( "detected lines", 1 );
   Mat src;
@@ -102,7 +126,14 @@ int main(int argc, char** argv)
 
   for(;;)
   {  
-    cap >> src;
+    
+    if (usingCamera == false) 
+    {
+      cap >> src;
+    } else {
+      camera.grab();
+      camera.retrieve(src);
+    }
     if(src.empty())
     {
         break;
@@ -173,10 +204,20 @@ int main(int argc, char** argv)
       cout << "converge at = " << convergance << "\n";
     
       if (convergance > 200)
-        cout << "departing to the left\n";
-      if (convergance < 130)
+	{
+          cout << "departing to the left\n";
+	  pilo.sendCommand(pilo.TICKS, -10, -8); 
+	}
+      else if (convergance < 130)
+      {
         cout << "departing to the right\n";
-    }
+        pilo.sendCommand(pilo.TICKS, -8, -10); 
+      }
+      else 
+      {
+          pilo.sendCommand(pilo.TICKS, -10, -10); 
+      }
+      }
     // if (bestRight != Vec4i(0,0,0,0))
     // {
     //   line( cdst, Point(bestRight[0], bestRight[1]), Point(bestRight[2], bestRight[3]), Scalar(0,0,255), 3, CV_AA);
@@ -188,14 +229,15 @@ int main(int argc, char** argv)
     // }
 
     imshow("detected lines", cdst);
+    char c = (char)waitKey(1);
+    if( c == 27 )
+       break;
 
-
-  
-    waitKey();
   }
-
+  camera.release();
   return 0;
 }
 
-// g++ hough.cpp `pkg-config --cflags --libs opencv`
+// g++ hough.cpp -I/usr/local/include/ -L/opt/vc/lib -lraspicam -lraspicam_cv -lmmal -lmmal_core -lmmal_util -lopencv_core -lopencv_highgui `pkg-config --cflags --libs opencv` -lwiringPiDev
+
 // ./a.out ~/Downloads/dach-normal.avi 
