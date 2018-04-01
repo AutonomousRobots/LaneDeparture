@@ -51,7 +51,7 @@ Vec4i extendLine(Vec4i line, int horizon, float slope)
 int getAverageConvergenceXValue(vector<Vec4i> lines)
 {
   int sum = 0;
-  for(int i; i < lines.size(); i++)
+  for(int i = 0; i < lines.size(); i++)
   {
     Vec4i line = lines[i];
     sum += line[2];
@@ -59,26 +59,37 @@ int getAverageConvergenceXValue(vector<Vec4i> lines)
   return sum / lines.size();
 }
 
-Vec4i getBestLine(vector<Vec4i> lines)
+Vec4i getBestLine(vector<Vec4i> lines, bool rightLine)
 {
-  Point beginningPointsSum, endPointsSum;
   int numberOfGoodLines = 0;
+  Vec4i bestLine = lines[0];
 
   for(int j = 0; j < lines.size(); j++)
   {
     Vec4i currentLine = lines[j];
-    if (currentLine[1] > 0)
+    if (currentLine[1] > bestLine[1])
     {
-      beginningPointsSum += Point(currentLine[0], currentLine[1]);
-      endPointsSum += Point(currentLine[2], currentLine[3]);
-      numberOfGoodLines += 1;
+        bestLine = currentLine;
+    }
+  }
+  for(int j = 0; j < lines.size(); j++)
+  {
+    Vec4i currentLine = lines[j];
+    if (!rightLine)
+    {
+        if (currentLine[1] == bestLine[1] && currentLine[0] > bestLine[0])
+        {
+            bestLine = currentLine;
+        }
+    } else {
+        if (currentLine[1] == bestLine[1] && currentLine[0] < bestLine[0]) 
+        {
+            bestLine = currentLine;
+        }
     }
   }
 
-
-  Point meanBeginningPoints = beginningPointsSum / numberOfGoodLines;
-  Point meanEndPoints = endPointsSum / numberOfGoodLines;
-  return Vec4i(meanBeginningPoints.x, meanBeginningPoints.y, meanEndPoints.x, meanEndPoints.y);
+  return bestLine;
 }
 
 
@@ -105,15 +116,16 @@ int main(int argc, char** argv)
     }
   else 
   {
-*/    usingCamera = true;
-    camera.set( CV_CAP_PROP_FORMAT, CV_8UC1 );
-    if (!camera.open()) 
-    {
-      runtime_error tError("[Raspi_Capture] Camera failed to open");
-      throw tError;
-    }
+*/    
+  usingCamera = true;
+  camera.set( CV_CAP_PROP_FORMAT, CV_8UC1 );
+  if (!camera.open()) 
+  {
+    runtime_error tError("[Raspi_Capture] Camera failed to open");
+  throw tError;
+  }
 //  }  
-  PiLo pilo;  //Start by creating a PiLo object (serial is started in the constructor)
+  PiLo pilo;
 
   if(!pilo.ok()){
     return 1;
@@ -121,7 +133,7 @@ int main(int argc, char** argv)
   
   
   namedWindow( "detected lines", 1 );
-  Mat src;
+  Mat frame;
   int yHorizonLine = 9999;
 
   for(;;)
@@ -129,21 +141,26 @@ int main(int argc, char** argv)
     
     if (usingCamera == false) 
     {
-      cap >> src;
+      cap >> frame;
     } else {
       camera.grab();
-      camera.retrieve(src);
+      camera.retrieve(frame);
     }
-    if(src.empty())
+    if(frame.empty())
     {
         break;
     }
 
     // get frame dimentions
-    Size size = src.size();
-    int xMidPoint = size.width / 2;
-    int xRightEdge = size.width;
+    Size size = frame.size();
+    Mat src;
+    Size newSize((size.width / 2), (size.height / 2));
+    resize(frame, src, newSize);
+    
+    int xMidPoint = newSize.width / 2;
+    int xRightEdge = newSize.width;
     int xLeftEdge = 0;
+    
     
     // prepare for Hough
     Mat dst, cdst;
@@ -163,73 +180,60 @@ int main(int argc, char** argv)
 
       // find slope, sort into left and right sides
       float slope = ((float)l[3] - (float)l[1]) / ((float)l[2] - (float)l[0]);
-      if (abs(slope) > 0.25 && abs(slope) < 0.99999) 
+      if (abs(slope) != numeric_limits<float>::infinity()) 
       {
-        yHorizonLine = findHorizon(l, yHorizonLine);
+        yHorizonLine = 0;
         if (slope > 0)
         {
           l = extendLine(l, yHorizonLine, slope);
           rightLines.push_back(l);
-          allLines.push_back(l);
         }
         else
         {
           l = extendLine(l, yHorizonLine, slope);
           leftLines.push_back(l);
-          allLines.push_back(l);
         }
-        line( cdst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(0,0,255), 3, CV_AA);
         //cout << "here's a line: (" << l[0] << "," << l[1] << ")(" << l[2] << "," << l[3] << ")\n";
       }
     }
 
-    // Vec4i bestRight, bestLeft = Vec4i(0,0,0,0);
-    // if (rightLines.size() > 1) 
-    //   bestRight = getBestLine(rightLines);
-    // else if (rightLines.size() == 0)
-    //   bestRight = rightLines[0];
-    // else
-    //   bestRight = bestRight;
+    Vec4i bestRight, bestLeft;
+    if (rightLines.size() > 0) 
+    {
+        bestRight = getBestLine(rightLines, true);
+        allLines.push_back(bestRight);
+        line( cdst, Point(bestRight[0], bestRight[1]), Point(bestRight[2], bestRight[3]), Scalar(0,0,255), 3, CV_AA);
+    }
+    if (leftLines.size() > 0)
+    {
+        bestLeft = getBestLine(leftLines, false);
+        allLines.push_back(bestLeft);
+        line( cdst, Point(bestLeft[0], bestLeft[1]), Point(bestLeft[2], bestLeft[3]), Scalar(0,0,255), 3, CV_AA);
+    }
     
-    // if (leftLines.size() > 1)
-    //   bestLeft = getBestLine(leftLines);
-    // else if (rightLines.size() == 0)
-    //   bestLeft = leftLines[0];
-    // else
-    //   bestLeft = bestLeft;
-
     if (!allLines.empty())
     {
       int convergance = getAverageConvergenceXValue(allLines);
       cout << "converge at = " << convergance << "\n";
     
-      if (convergance > 200)
-	{
-          cout << "departing to the left\n";
-	  pilo.sendCommand(pilo.TICKS, -10, -8); 
-	}
-      else if (convergance < 130)
+      if (convergance > xMidPoint + 50)
+      {
+        cout << "departing to the left\n";
+        pilo.sendCommand(pilo.TICKS, 2, -2); 
+	  }
+      else if (convergance < xMidPoint - 50)
       {
         cout << "departing to the right\n";
-        pilo.sendCommand(pilo.TICKS, -8, -10); 
+        pilo.sendCommand(pilo.TICKS, -2, 2); 
       }
       else 
       {
-          pilo.sendCommand(pilo.TICKS, -10, -10); 
+          pilo.sendCommand(pilo.TICKS, -20, -20); 
       }
-      }
-    // if (bestRight != Vec4i(0,0,0,0))
-    // {
-    //   line( cdst, Point(bestRight[0], bestRight[1]), Point(bestRight[2], bestRight[3]), Scalar(0,0,255), 3, CV_AA);
-    //   cout << "here's a right line: (" << bestRight[0] << "," << bestRight[1] << ")(" << bestRight[2] << "," << bestRight[3] << ")\n";
-    // }
-    // if (bestLeft != Vec4i(0,0,0,0)){
-    //   line( cdst, Point(bestLeft[0], bestLeft[1]), Point(bestLeft[2], bestLeft[3]), Scalar(0,0,255), 3, CV_AA);
-    //   cout << "here's a left line: (" << bestLeft[0] << "," << bestLeft[1] << ")(" << bestLeft[2] << "," << bestLeft[3] << ")\n";
-    // }
+    }
 
     imshow("detected lines", cdst);
-    char c = (char)waitKey(1);
+    char c = (char)waitKey(1000);
     if( c == 27 )
        break;
 
