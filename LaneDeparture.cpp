@@ -17,6 +17,8 @@ string LaneDeparture::checkForLanes(Mat frame) {
     resize(frame, src, newSize);
     
     int xMidPoint = newSize.width / 2;
+    int yThirdPoint = newSize.height - (newSize.height / 3);
+    
     // prepare for Hough
     Mat hsvSrc;
     cvtColor(src, hsvSrc, CV_BGR2HSV);
@@ -43,13 +45,15 @@ string LaneDeparture::checkForLanes(Mat frame) {
         yHorizonLine = 0;
         if (slope > 0)
         {
-          l = extendLine(l, yHorizonLine, slope);
-          rightLines.push_back(l);
+          l = extendLine(l, yHorizonLine, slope, yThirdPoint);
+          if (l != Vec4i(0,0,0,0)) 
+            rightLines.push_back(l);
         }
         else
         {
-          l = extendLine(l, yHorizonLine, slope);
-          leftLines.push_back(l);
+          l = extendLine(l, yHorizonLine, slope, yThirdPoint);
+          if (l != Vec4i(0,0,0,0))
+            leftLines.push_back(l);
         }
         //cout << "here's a line: (" << l[0] << "," << l[1] << ")(" << l[2] << "," << l[3] << ")\n";
       }
@@ -74,22 +78,26 @@ string LaneDeparture::checkForLanes(Mat frame) {
     if (!allLines.empty())
     {
       int convergance = getAverageConvergenceXValue(allLines);
+      vector<Vec4i> checkRight, checkLeft;
+      checkRight.push_back(bestRight);
+      checkLeft.push_back(bestLeft);
+      int rightLaneCross = getAverageConvergenceXValue(checkRight);
+      int leftLaneCross = getAverageConvergenceXValue(checkLeft);
       cout << "converge at = " << convergance << "\n";
-    
-      if (convergance > xMidPoint + 20 && convergance < xMidPoint +50)
+      if (convergance > xMidPoint + 50)
+          return "hardLeft";
+      else if (convergance < xMidPoint -50)
+          return "hardRight";
+      else if (leftLaneCross > xMidPoint + 20)
       {
         cout << "departing to the left\n";
         return "left";
 	  }
-	  else if (convergance > xMidPoint + 50)
-          return "hardLeft";
-      else if (convergance < xMidPoint - 20 && convergance > xMidPoint -50)
+      else if (rightLaneCross < xMidPoint - 20)
       {
         cout << "departing to the right\n";
         return "right";
       }
-      else if (convergance < xMidPoint -50)
-          return "hardRight";
       else 
       {
           return "none";
@@ -110,7 +118,7 @@ int LaneDeparture::findHorizon(Vec4i line, int horizon)
   return horizon;
 }
 
-Vec4i LaneDeparture::extendLine(Vec4i line, int horizon, float slope)
+Vec4i LaneDeparture::extendLine(Vec4i line, int horizon, float slope, int yThirdPoint)
 {
   Point topPoint, bottomPoint;
   if (line[1] > line[3])
@@ -123,12 +131,17 @@ Vec4i LaneDeparture::extendLine(Vec4i line, int horizon, float slope)
     bottomPoint = Point(line[2], line[3]);
     topPoint = Point(line[0], line[1]);
   }
-
-  int yDistanceToHorizon = topPoint.y - horizon;
-  int xDistanceToHorizon = yDistanceToHorizon / slope;
-  topPoint = Point((topPoint.x - xDistanceToHorizon), (horizon));
-
-  return Vec4i(bottomPoint.x, bottomPoint.y, topPoint.x, topPoint.y);
+  
+  if (bottomPoint.y > yThirdPoint)
+  {
+    int yDistanceToHorizon = topPoint.y - horizon;
+    int xDistanceToHorizon = yDistanceToHorizon / slope;
+    topPoint = Point((topPoint.x - xDistanceToHorizon), (horizon));
+  
+    return Vec4i(bottomPoint.x, bottomPoint.y, topPoint.x, topPoint.y);
+  } else {
+    return Vec4i(0,0,0,0);
+  } 
 }
 
 int LaneDeparture::getAverageConvergenceXValue(vector<Vec4i> lines)

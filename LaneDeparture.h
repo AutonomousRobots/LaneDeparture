@@ -23,7 +23,7 @@ private:
     Mat blueFilter(const Mat&, Mat);
     Vec4i getBestLine(vector<Vec4i>, bool);
     int getAverageConvergenceXValue(vector<Vec4i>);
-    Vec4i extendLine(Vec4i, int, float);
+    Vec4i extendLine(Vec4i, int, float, int);
     int findHorizon(Vec4i, int); 
 };
 
