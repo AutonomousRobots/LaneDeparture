@@ -6,11 +6,13 @@
 #include "PiLo.h"
 #include "Path.h"
 #include "LaneDeparture.h"
+#include "QRcodeScanner.h"
 
 #include <iostream>
 
 using namespace cv;
 using namespace std;
+
 
 
 int main(int argc, char** argv)
@@ -54,6 +56,7 @@ int main(int argc, char** argv)
   
   namedWindow( "detected lines", 1 );
   Mat frame;
+  QRcodeScanner scanner;
   LaneDeparture laneDetector;
 
   for(;;)
@@ -71,6 +74,15 @@ int main(int argc, char** argv)
         break;
     }
     
+    //QRcode landmark drive
+    vector<QRcodeScanner::decodedObject> decodedObjects;
+    scanner.decode(im, decodedObjects);
+
+    if (decodedObjects.size() > 0){
+        cout << "QRcode data : " << decodedObjects[0].data << endl;
+        //do stuff
+    }
+    //LaneDetector Drive
     string directionOfDeparture = laneDetector.checkForLanes(frame);
     if (directionOfDeparture == "left")
         pilo.sendCommand(1, -5, -10); 
@@ -89,6 +101,6 @@ int main(int argc, char** argv)
   return 0;
 }
 
-// g++ hough.cpp -I/usr/local/include/ -L/opt/vc/lib -lraspicam -lraspicam_cv -lmmal -lmmal_core -lmmal_util -lopencv_core -lopencv_highgui `pkg-config --cflags --libs opencv` -lwiringPi Path.cpp PiLo.cpp LaneDeparture.cpp
+// g++ hough.cpp -I/usr/local/include/ -L/opt/vc/lib -lraspicam -lraspicam_cv -lmmal -lmmal_core -lmmal_util -lopencv_core -lopencv_highgui `pkg-config --cflags --libs opencv` -lwiringPi -lzbar Path.cpp PiLo.cpp LaneDeparture.cpp QRcodeScanner.cpp
 
 // ./a.out ~/Downloads/dach-normal.avi 
